@@ -52,7 +52,7 @@ public class Polymath implements HostingProvider {
             }
             if (jsonOutput.has("url") && jsonOutput.has("sha1")) {
                 packUrl = jsonOutput.get("url").getAsString();
-                minecraftPackURL = packUrl.replace("https://", "http://");
+                minecraftPackURL = packUrl;
                 sha1 = jsonOutput.get("sha1").getAsString();
                 return true;
             }
