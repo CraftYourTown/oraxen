@@ -2,14 +2,13 @@ package io.th0rgal.oraxen.compatibilities;
 
 import io.th0rgal.oraxen.compatibilities.provided.blocklocker.BlockLockerCompatibility;
 import io.th0rgal.oraxen.compatibilities.provided.bossshoppro.BossShopProCompatibility;
-import io.th0rgal.oraxen.compatibilities.provided.lightapi.WrappedLightAPI;
 import io.th0rgal.oraxen.compatibilities.provided.mythicmobs.MythicMobsCompatibility;
 import io.th0rgal.oraxen.compatibilities.provided.placeholderapi.PlaceholderAPICompatibility;
 import io.th0rgal.oraxen.compatibilities.provided.worldedit.WrappedWorldEdit;
 import io.th0rgal.oraxen.config.Message;
 import io.th0rgal.oraxen.utils.AdventureUtils;
+import io.th0rgal.oraxen.utils.PluginUtils;
 import io.th0rgal.oraxen.utils.logs.Logs;
-import org.bukkit.Bukkit;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.concurrent.ConcurrentHashMap;
@@ -22,7 +21,6 @@ public class CompatibilitiesManager {
     private static final ConcurrentHashMap<String, CompatibilityProvider<?>> ACTIVE_COMPATIBILITY_PROVIDERS = new ConcurrentHashMap<>();
 
     public static void enableNativeCompatibilities() {
-        WrappedLightAPI.init();
         WrappedWorldEdit.init();
         WrappedWorldEdit.registerParser();
         new CompatibilityListener();
@@ -113,6 +111,6 @@ public class CompatibilitiesManager {
     }
 
     public static boolean hasPlugin(String name) {
-        return Bukkit.getPluginManager().isPluginEnabled(name);
+        return PluginUtils.isEnabled(name);
     }
 }

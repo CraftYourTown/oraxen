@@ -18,6 +18,7 @@ import org.bukkit.entity.*;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.util.BoundingBox;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -48,7 +49,9 @@ public class OraxenFurniture {
      * @return true if the block is an instance of a Furniture, otherwise false
      */
     public static boolean isFurniture(Block block) {
-        return block.getType() == Material.BARRIER && getFurnitureMechanic(block) != null;
+        BoundingBox blockBox = BoundingBox.of(BlockHelpers.toCenterLocation(block.getLocation()), 0.5, 0.5, 0.5);
+        return (block.getType() == Material.BARRIER && getFurnitureMechanic(block) != null) ||
+                !block.getWorld().getNearbyEntities(blockBox).stream().filter(OraxenFurniture::isFurniture).toList().isEmpty();
     }
 
     /**
@@ -163,6 +166,8 @@ public class OraxenFurniture {
             StorageMechanic storage = mechanic.getStorage();
             if (storage != null && (storage.isStorage() || storage.isShulker()))
                 storage.dropStorageContent(mechanic, baseEntity);
+
+            baseEntity.getWorld().sendGameEvent(player, GameEvent.BLOCK_DESTROY, baseEntity.getLocation().toVector());
         }
 
         if (mechanic.hasBarriers())
@@ -206,6 +211,7 @@ public class OraxenFurniture {
             StorageMechanic storage = mechanic.getStorage();
             if (storage != null && (storage.isStorage() || storage.isShulker()))
                 storage.dropStorageContent(mechanic, baseEntity);
+            baseEntity.getWorld().sendGameEvent(player, GameEvent.BLOCK_DESTROY, baseEntity.getLocation().toVector());
         }
 
         // Check if the mechanic or the baseEntity has barriers tied to it
@@ -297,7 +303,7 @@ public class OraxenFurniture {
             }
 
             if (!OraxenFurniture.remove(entity, null)) return;
-            Entity newEntity = mechanic.place(entity.getLocation(), newItem, FurnitureMechanic.getFurnitureYaw(entity), oldFacing);
+            Entity newEntity = mechanic.place(entity.getLocation(), newItem, FurnitureMechanic.getFurnitureYaw(entity), oldFacing, true);
             if (newEntity == null) return;
 
             // Copy old PDC to new PDC, skip keys that should not persist

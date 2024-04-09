@@ -18,21 +18,15 @@ import io.th0rgal.oraxen.pack.upload.UploadManager;
 import io.th0rgal.oraxen.sound.CustomSound;
 import io.th0rgal.oraxen.sound.SoundManager;
 import io.th0rgal.oraxen.utils.*;
-import io.th0rgal.oraxen.utils.customarmor.CustomArmorsTextures;
+import io.th0rgal.oraxen.utils.customarmor.CustomArmorType;
+import io.th0rgal.oraxen.utils.customarmor.ShaderArmorTextures;
+import io.th0rgal.oraxen.utils.customarmor.TrimArmorDatapack;
 import io.th0rgal.oraxen.utils.logs.Logs;
-import net.kyori.adventure.text.Component;
-import net.minecraft.world.scores.ScoreHolder;
-import net.minecraft.world.scores.criteria.ObjectiveCriteria;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.craftbukkit.v1_20_R3.entity.CraftPlayer;
-import org.bukkit.scoreboard.DisplaySlot;
-import org.bukkit.scoreboard.RenderType;
-import org.bukkit.scoreboard.Score;
-import org.bukkit.scoreboard.Scoreboard;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -49,7 +43,8 @@ public class ResourcePack {
 
     private final Map<String, Collection<Consumer<File>>> packModifiers;
     private static Map<String, VirtualFile> outputFiles;
-    private CustomArmorsTextures customArmorsTextures;
+    private ShaderArmorTextures shaderArmorTextures;
+    private TrimArmorDatapack trimArmorDatapack;
     private static final File packFolder = new File(OraxenPlugin.get().getDataFolder(), "pack");
     private final File pack = new File(packFolder, packFolder.getName() + ".zip");
 
@@ -62,16 +57,22 @@ public class ResourcePack {
     public void generate() {
         outputFiles.clear();
 
-        customArmorsTextures = new CustomArmorsTextures((int) Settings.ARMOR_RESOLUTION.getValue());
         makeDirsIfNotExists(packFolder, new File(packFolder, "assets"));
 
+        if (CustomArmorType.getSetting() == CustomArmorType.TRIMS) {
+            trimArmorDatapack = new TrimArmorDatapack();
+        } else trimArmorDatapack = null;
+
+        if (CustomArmorType.getSetting() == CustomArmorType.SHADER) {
+            shaderArmorTextures = new ShaderArmorTextures();
+        } else shaderArmorTextures = null;
 
         if (Settings.GENERATE_DEFAULT_ASSETS.toBool()) extractDefaultFolders();
         extractRequired();
 
         if (!Settings.GENERATE.toBool()) return;
 
-        if (Settings.HIDE_SCOREBOARD_NUMBERS.toBool() && Bukkit.getPluginManager().isPluginEnabled("HappyHUD")) {
+        if (Settings.HIDE_SCOREBOARD_NUMBERS.toBool() && PluginUtils.isEnabled("HappyHUD")) {
             Logs.logError("HappyHUD detected with hide_scoreboard_numbers enabled!");
             Logs.logWarning("Recommend following this guide for compatibility: https://docs.oraxen.com/compatibility/happyhud");
         }
@@ -91,8 +92,9 @@ public class ResourcePack {
         if (Settings.GESTURES_ENABLED.toBool()) generateGestureFiles();
         if (Settings.HIDE_SCOREBOARD_NUMBERS.toBool()) hideScoreboardNumbers();
         if (Settings.HIDE_SCOREBOARD_BACKGROUND.toBool()) generateScoreboardHideBackground();
-        if (Settings.GENERATE_ARMOR_SHADER_FILES.toBool()) CustomArmorsTextures.generateArmorShaderFiles();
         if (Settings.TEXTURE_SLICER.toBool()) PackSlicer.slicePackFiles();
+        if (CustomArmorType.getSetting() == CustomArmorType.SHADER && Settings.CUSTOM_ARMOR_SHADER_GENERATE_FILES.toBool())
+            ShaderArmorTextures.generateArmorShaderFiles();
 
         for (final Collection<Consumer<File>> packModifiers : packModifiers.values())
             for (Consumer<File> packModifier : packModifiers)
@@ -116,13 +118,8 @@ public class ResourcePack {
             // Convert the global.json within the lang-folder to all languages
             convertGlobalLang(output);
 
-            if (Settings.GENERATE_CUSTOM_ARMOR_TEXTURES.toBool() && customArmorsTextures.hasCustomArmors()) {
-                String armorPath = "assets/minecraft/textures/models/armor";
-                output.add(new VirtualFile(armorPath, "leather_layer_1.png", customArmorsTextures.getLayerOne()));
-                output.add(new VirtualFile(armorPath, "leather_layer_2.png", customArmorsTextures.getLayerTwo()));
-                if (Settings.AUTOMATICALLY_GENERATE_SHADER_COMPATIBLE_ARMOR.toBool())
-                    output.addAll(customArmorsTextures.getOptifineFiles());
-            }
+            // Handles generation of datapack & other files for custom armor
+            handleCustomArmor(output);
 
             Collections.sort(output);
         } catch (IOException e) {
@@ -158,9 +155,14 @@ public class ResourcePack {
             EventUtils.callEvent(event);
             ZipUtils.writeZipFile(pack, event.getOutput());
 
-            UploadManager uploadManager = new UploadManager(OraxenPlugin.get());
-            OraxenPlugin.get().setUploadManager(uploadManager);
-            uploadManager.uploadAsyncAndSendToPlayers(OraxenPlugin.get().getResourcePack());
+            UploadManager uploadManager = OraxenPlugin.get().getUploadManager();
+            if (uploadManager != null) { // If the uploadManager isnt null, this was triggered by a pack-reload
+                uploadManager.uploadAsyncAndSendToPlayers(OraxenPlugin.get().getResourcePack(), true, true);
+            } else { // Otherwise this is was triggered on server-startup
+                uploadManager = new UploadManager(OraxenPlugin.get());
+                OraxenPlugin.get().setUploadManager(uploadManager);
+                uploadManager.uploadAsyncAndSendToPlayers(OraxenPlugin.get().getResourcePack(), false, false);
+            }
         });
     }
 
@@ -336,8 +338,8 @@ public class ResourcePack {
         final Map<Material, List<ItemBuilder>> texturedItems = new HashMap<>();
         for (final Map.Entry<String, ItemBuilder> entry : OraxenItems.getEntries()) {
             final ItemBuilder item = entry.getValue();
-            if (item.getOraxenMeta().hasPackInfos()) {
-                OraxenMeta oraxenMeta = item.getOraxenMeta();
+            OraxenMeta oraxenMeta = item.getOraxenMeta();
+            if (item.hasOraxenMeta() && oraxenMeta.hasPackInfos()) {
                 if (oraxenMeta.shouldGenerateModel()) {
                     writeStringToVirtual(oraxenMeta.getModelPath(),
                             item.getOraxenMeta().getModelName() + ".json",
@@ -537,7 +539,7 @@ public class ResourcePack {
         try {
             final InputStream fis;
             if (file.getName().endsWith(".json")) fis = processJsonFile(file);
-            else if (customArmorsTextures.registerImage(file)) return;
+            else if (CustomArmorType.getSetting() == CustomArmorType.SHADER && shaderArmorTextures.registerImage(file)) return;
             else fis = new FileInputStream(file);
 
             output.add(new VirtualFile(getZipFilePath(file.getParentFile().getCanonicalPath(), newFolder), file.getName(), fis));
@@ -590,6 +592,28 @@ public class ResourcePack {
         if (newFolder.equals(packFolder.getCanonicalPath())) return "";
         String prefix = newFolder.isEmpty() ? newFolder : newFolder + "/";
         return prefix + path.substring(packFolder.getCanonicalPath().length() + 1);
+    }
+
+    private void handleCustomArmor(List<VirtualFile> output) {
+        CustomArmorType customArmorType = CustomArmorType.getSetting();
+        // Clear out old datapacks before generating new ones, in case type changed or otherwise
+        TrimArmorDatapack.clearOldDataPacks();
+
+        switch (customArmorType) {
+            case TRIMS -> trimArmorDatapack.generateTrimAssets(output);
+            case SHADER -> {
+                if (Settings.CUSTOM_ARMOR_SHADER_GENERATE_CUSTOM_TEXTURES.toBool() && shaderArmorTextures.hasCustomArmors()) try {
+                    String armorPath = "assets/minecraft/textures/models/armor";
+                    output.add(new VirtualFile(armorPath, "leather_layer_1.png", shaderArmorTextures.getLayerOne()));
+                    output.add(new VirtualFile(armorPath, "leather_layer_2.png", shaderArmorTextures.getLayerTwo()));
+                    if (Settings.CUSTOM_ARMOR_SHADER_GENERATE_SHADER_COMPATIBLE_ARMOR.toBool()) {
+                        output.addAll(shaderArmorTextures.getOptifineFiles());
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
     }
 
     private void convertGlobalLang(List<VirtualFile> output) {

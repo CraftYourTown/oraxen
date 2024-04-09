@@ -5,10 +5,8 @@ import io.th0rgal.oraxen.OraxenPlugin;
 import io.th0rgal.oraxen.api.OraxenBlocks;
 import io.th0rgal.oraxen.api.OraxenFurniture;
 import io.th0rgal.oraxen.api.OraxenItems;
-import io.th0rgal.oraxen.api.events.noteblock.OraxenNoteBlockPlaceEvent;
 import io.th0rgal.oraxen.api.events.stringblock.OraxenStringBlockInteractEvent;
 import io.th0rgal.oraxen.api.events.stringblock.OraxenStringBlockPlaceEvent;
-import io.th0rgal.oraxen.compatibilities.provided.lightapi.WrappedLightAPI;
 import io.th0rgal.oraxen.mechanics.MechanicFactory;
 import io.th0rgal.oraxen.mechanics.provided.gameplay.limitedplacing.LimitedPlacing;
 import io.th0rgal.oraxen.utils.BlockHelpers;
@@ -98,7 +96,7 @@ public class StringBlockMechanicListener implements Listener {
                 block.setType(Material.AIR, false);
 
                 if (mechanic.hasLight())
-                    WrappedLightAPI.removeBlockLight(block.getLocation());
+                    mechanic.getLight().removeBlockLight(block);
                 mechanic.getDrop().spawns(block.getLocation(), new ItemStack(Material.AIR));
             }
         }
@@ -298,6 +296,34 @@ public class StringBlockMechanicListener implements Listener {
         });
     }
 
+    @EventHandler
+    public void onBlockExplosionDestroy(BlockExplodeEvent event) {
+        List<Block> blockList = event.blockList().stream().filter(block -> block.getType().equals(Material.TRIPWIRE)).toList();
+        blockList.forEach(block -> {
+            final StringBlockMechanic stringBlockMechanic = OraxenBlocks.getStringMechanic(block);
+            if (stringBlockMechanic == null) return;
+
+            final Block blockAbove = block.getRelative(BlockFace.UP);
+            final Block blockBelow = block.getRelative(BlockFace.DOWN);
+            if (block.getType() == Material.TRIPWIRE) {
+                StringBlockMechanic mechanicBelow = OraxenBlocks.getStringMechanic(blockBelow);
+                if (OraxenBlocks.isOraxenStringBlock(block)) {
+                    OraxenBlocks.remove(block.getLocation(), null, true);
+                    event.blockList().remove(block);
+                }
+                else if (mechanicBelow != null && mechanicBelow.isTall()) {
+                    OraxenBlocks.remove(blockBelow.getLocation(), null, true);
+                    event.blockList().remove(block);
+                }
+            } else {
+                if (!OraxenBlocks.isOraxenStringBlock(blockAbove)) return;
+
+                OraxenBlocks.remove(blockAbove.getLocation(), null, true);
+                event.blockList().remove(block);
+            }
+        });
+    }
+
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onWaterUpdate(final BlockFromToEvent event) {
         final Block changed = event.getToBlock();
@@ -341,6 +367,12 @@ public class StringBlockMechanicListener implements Listener {
             }
             event.setCursor(item);
         }
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void updateLightOnBlockBreak(BlockBreakEvent event) {
+        Block block = event.getBlock();
+        //if (!OraxenBlocks.isOraxenStringBlock(block)) LightMechanic.refreshBlockLight(block);
     }
 
     private HardnessModifier getHardnessModifier() {
@@ -400,7 +432,7 @@ public class StringBlockMechanicListener implements Listener {
                 blockPlaceEvent.setCancelled(true);
             else blockAbove.setType(Material.TRIPWIRE);
         }
-        if (BlockHelpers.isStandingInside(player, target) || !ProtectionLib.canBuild(player, target.getLocation())) blockPlaceEvent.setCancelled(true);
+        if (!ProtectionLib.canBuild(player, target.getLocation())) blockPlaceEvent.setCancelled(true);
         //if (player.getGameMode() == GameMode.ADVENTURE) blockPlaceEvent.setCancelled(true);
         if (!worldHeightRange.contains(target.getY()))
             blockPlaceEvent.setCancelled(true);
@@ -427,6 +459,7 @@ public class StringBlockMechanicListener implements Listener {
             target.setType(Material.AIR);
             BlockHelpers.correctAllBlockStates(placedAgainst, player, hand, face, item, newData);
         }
+        target.getWorld().sendGameEvent(player, GameEvent.BLOCK_PLACE, target.getLocation().toVector());
     }
 
     public static void fixClientsideUpdate(Location loc) {
