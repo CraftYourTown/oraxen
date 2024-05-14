@@ -9,10 +9,7 @@ import io.th0rgal.oraxen.api.events.noteblock.OraxenNoteBlockPlaceEvent;
 import io.th0rgal.oraxen.mechanics.provided.gameplay.limitedplacing.LimitedPlacing;
 import io.th0rgal.oraxen.mechanics.provided.gameplay.noteblock.directional.DirectionalBlock;
 import io.th0rgal.oraxen.mechanics.provided.gameplay.storage.StorageMechanic;
-import io.th0rgal.oraxen.utils.BlockHelpers;
-import io.th0rgal.oraxen.utils.EventUtils;
-import io.th0rgal.oraxen.utils.Utils;
-import io.th0rgal.oraxen.utils.VersionUtil;
+import io.th0rgal.oraxen.utils.*;
 import io.th0rgal.oraxen.utils.breaker.BreakerSystem;
 import io.th0rgal.oraxen.utils.breaker.HardnessModifier;
 import io.th0rgal.protectionlib.ProtectionLib;
@@ -46,7 +43,7 @@ import static io.th0rgal.oraxen.utils.BlockHelpers.isLoaded;
 public class NoteBlockMechanicListener implements Listener {
 
     public NoteBlockMechanicListener() {
-        BreakerSystem.MODIFIERS.add(getHardnessModifier());
+        if (PluginUtils.isEnabled("ProtocolLib")) BreakerSystem.MODIFIERS.add(getHardnessModifier());
     }
 
     public static class NoteBlockMechanicPaperListener implements Listener {
@@ -221,7 +218,7 @@ public class NoteBlockMechanicListener implements Listener {
         if (type == Material.AIR) return;
 
         BlockData newData = type.isBlock() ? type.createBlockData() : null;
-        makePlayerPlaceBlock(player, event.getHand(), item, block, event.getBlockFace(), newData);
+        makePlayerPlaceBlock(player, event.getHand(), item, block, blockFace, newData);
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -441,10 +438,8 @@ public class NoteBlockMechanicListener implements Listener {
         final Material type = placedAgainst.getType();
 
         if (BlockHelpers.isReplaceable(type)) target = placedAgainst;
-        else {
-            target = placedAgainst.getRelative(face);
-            if (!BlockHelpers.isReplaceable(target.getType())) return;
-        }
+        else target = placedAgainst.getRelative(face);
+        if (!BlockHelpers.isReplaceable(target.getType())) return;
 
         final NoteBlockMechanic againstMechanic = OraxenBlocks.getNoteBlockMechanic(placedAgainst);
         // Store oldData incase event(s) is cancelled, set the target blockData
@@ -453,12 +448,17 @@ public class NoteBlockMechanicListener implements Listener {
         if (newData != null) {
             target.setBlockData(newData);
             final BlockPlaceEvent blockPlaceEvent = new BlockPlaceEvent(target, target.getState(), placedAgainst, item, player, true, hand);
+            final Material material = newData.getMaterial();
 
             if (againstMechanic != null && (againstMechanic.isStorage() || againstMechanic.hasClickActions()))
                 blockPlaceEvent.setCancelled(true);
             if (BlockHelpers.isStandingInside(player, target) || !ProtectionLib.canBuild(player, target.getLocation()))
                 blockPlaceEvent.setCancelled(true);
             if (!Range.between(target.getWorld().getMinHeight(), target.getWorld().getMaxHeight() - 1).contains(target.getY()))
+                blockPlaceEvent.setCancelled(true);
+            if (Tag.WOODEN_DOORS.isTagged(material) && (!target.canPlace(newData) || !target.getRelative(BlockFace.UP).isEmpty()))
+                blockPlaceEvent.setCancelled(true);
+            if (Tag.WOODEN_PRESSURE_PLATES.isTagged(material) && !target.canPlace(newData))
                 blockPlaceEvent.setCancelled(true);
 
             // Call the event and check if it is cancelled, if so reset BlockData
@@ -491,10 +491,10 @@ public class NoteBlockMechanicListener implements Listener {
             if (player.getGameMode() != GameMode.CREATIVE) item.setAmount(item.getAmount() - 1);
             Utils.swingHand(player, hand);
         } else {
-            target.setType(Material.AIR);
+            target.setBlockData(oldData);
             BlockHelpers.correctAllBlockStates(placedAgainst, player, hand, face, item, newData);
         }
-        target.getWorld().sendGameEvent(player, GameEvent.BLOCK_PLACE, target.getLocation().toVector());
+        if (VersionUtil.isPaperServer()) target.getWorld().sendGameEvent(player, GameEvent.BLOCK_PLACE, target.getLocation().toVector());
     }
 
     // Used to determine what instrument to use when playing a note depending on below block
