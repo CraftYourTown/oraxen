@@ -228,9 +228,7 @@ public class FontManager {
     public void sendGlyphTabCompletion(Player player) {
         List<String> completions = getGlyphByPlaceholderMap().values().stream()
                 .filter(Glyph::hasTabCompletion)
-                .flatMap(glyph -> Settings.UNICODE_COMPLETIONS.toBool()
-                        ? Stream.of(glyph.getCharacter())
-                        : Arrays.stream(glyph.getPlaceholders()))
+                .map(glyph -> glyph.getPlaceholders()[0])
                 .toList();
 
         if (VersionUtil.atOrAbove("1.19.4")) {
