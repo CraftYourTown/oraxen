@@ -85,6 +85,10 @@ public class AdventureUtils {
         return MINI_MESSAGE.serialize(LEGACY_SERIALIZER.deserialize(message)).replaceAll("\\\\(?!u)(?!n)(?!\")", "");
     }
 
+    public static Component parseLegacyToComponent(String message) {
+        return LEGACY_SERIALIZER.deserialize(message);
+    }
+
     public static Component parseLegacy(Component message) {
         return MINI_MESSAGE.deserialize(LEGACY_SERIALIZER.serialize(message));
     }

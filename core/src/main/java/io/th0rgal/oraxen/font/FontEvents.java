@@ -181,7 +181,7 @@ public class FontEvents implements Listener {
                             : line.replace(entry.getKey(), ChatColor.WHITE + unicode + PapiAliases.setPlaceholders(player, manager.permsChatcolor))
                             .replace(unicode, ChatColor.WHITE + unicode + ChatColor.BLACK);
             }
-            event.setLine(i, AdventureUtils.parseLegacy(line));
+            event.line(i, AdventureUtils.parseLegacyToComponent(line));
         }
     }
 
