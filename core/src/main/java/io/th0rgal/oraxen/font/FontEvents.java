@@ -20,11 +20,19 @@ import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
-import org.bukkit.event.*;
+import org.bukkit.event.Event;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
+import org.bukkit.event.HandlerList;
+import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.SignChangeEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
-import org.bukkit.event.player.*;
+import org.bukkit.event.player.AsyncPlayerChatEvent;
+import org.bukkit.event.player.PlayerEditBookEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.AnvilInventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.BookMeta;
@@ -35,18 +43,22 @@ import java.util.Arrays;
 import java.util.Map;
 
 import static io.th0rgal.oraxen.items.ItemBuilder.ORIGINAL_NAME_KEY;
-import static io.th0rgal.oraxen.utils.AdventureUtils.*;
+import static io.th0rgal.oraxen.utils.AdventureUtils.LEGACY_SERIALIZER;
+import static io.th0rgal.oraxen.utils.AdventureUtils.MINI_MESSAGE;
+import static io.th0rgal.oraxen.utils.AdventureUtils.MINI_MESSAGE_EMPTY;
 
 public class FontEvents implements Listener {
 
     private final FontManager manager;
-    @Nullable PaperChatHandler paperChatHandler;
-    @Nullable LegacyPaperChatHandler legacyPaperChatHandler;
-    @Nullable SpigotChatHandler spigotChatHandler;
+    @Nullable
+    PaperChatHandler paperChatHandler;
+    @Nullable
+    LegacyPaperChatHandler legacyPaperChatHandler;
+    @Nullable
+    SpigotChatHandler spigotChatHandler;
 
     enum ChatHandler {
-        LEGACY,
-        MODERN;
+        LEGACY, MODERN;
 
         public static boolean isLegacy() {
             return get() == LEGACY;
@@ -71,29 +83,23 @@ public class FontEvents implements Listener {
     public FontEvents(FontManager manager) {
         this.manager = manager;
         if (VersionUtil.isPaperServer()) {
-            if (VersionUtil.atOrAbove("1.19.1"))
-                paperChatHandler = new PaperChatHandler();
+            if (VersionUtil.atOrAbove("1.19.1")) paperChatHandler = new PaperChatHandler();
             legacyPaperChatHandler = new LegacyPaperChatHandler();
         }
         spigotChatHandler = new SpigotChatHandler();
     }
 
     public void registerChatHandlers() {
-        if (paperChatHandler != null)
-            Bukkit.getPluginManager().registerEvents(paperChatHandler, OraxenPlugin.get());
+        if (paperChatHandler != null) Bukkit.getPluginManager().registerEvents(paperChatHandler, OraxenPlugin.get());
         if (legacyPaperChatHandler != null)
             Bukkit.getPluginManager().registerEvents(legacyPaperChatHandler, OraxenPlugin.get());
-        if (spigotChatHandler != null)
-            Bukkit.getPluginManager().registerEvents(spigotChatHandler, OraxenPlugin.get());
+        if (spigotChatHandler != null) Bukkit.getPluginManager().registerEvents(spigotChatHandler, OraxenPlugin.get());
     }
 
     public void unregisterChatHandlers() {
-        if (paperChatHandler != null)
-            HandlerList.unregisterAll(paperChatHandler);
-        if (legacyPaperChatHandler != null)
-            HandlerList.unregisterAll(legacyPaperChatHandler);
-        if (spigotChatHandler != null)
-            HandlerList.unregisterAll(spigotChatHandler);
+        if (paperChatHandler != null) HandlerList.unregisterAll(paperChatHandler);
+        if (legacyPaperChatHandler != null) HandlerList.unregisterAll(legacyPaperChatHandler);
+        if (spigotChatHandler != null) HandlerList.unregisterAll(spigotChatHandler);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
@@ -133,20 +139,12 @@ public class FontEvents implements Listener {
             for (Map.Entry<String, Glyph> entry : manager.getGlyphByPlaceholderMap().entrySet()) {
                 String unicode = String.valueOf(entry.getValue().getCharacter());
                 if (entry.getValue().hasPermission(player))
-                    page = (manager.permsChatcolor == null)
-                            ? page.replace(entry.getKey(), ChatColor.WHITE + unicode + ChatColor.BLACK)
-                            .replace(unicode, ChatColor.WHITE + unicode + ChatColor.BLACK)
-                            : page.replace(entry.getKey(), ChatColor.WHITE + unicode + PapiAliases.setPlaceholders(player, manager.permsChatcolor))
-                            .replace(unicode, ChatColor.WHITE + unicode + ChatColor.BLACK);
+                    page = (manager.permsChatcolor == null) ? page.replace(entry.getKey(), ChatColor.WHITE + unicode + ChatColor.BLACK).replace(unicode, ChatColor.WHITE + unicode + ChatColor.BLACK) : page.replace(entry.getKey(), ChatColor.WHITE + unicode + PapiAliases.setPlaceholders(player, manager.permsChatcolor)).replace(unicode, ChatColor.WHITE + unicode + ChatColor.BLACK);
                 meta.setPage(i, AdventureUtils.parseLegacy(page));
             }
         }
 
-        Book book = Book.builder()
-                .title(MINI_MESSAGE.deserialize(meta.getTitle() != null ? meta.getTitle() : ""))
-                .author(MINI_MESSAGE.deserialize(meta.getAuthor() != null ? meta.getAuthor() : ""))
-                .pages(meta.getPages().stream().map(p -> MINI_MESSAGE_EMPTY.deserialize(p, GlyphTag.getResolverForPlayer(player))).toList())
-                .build();
+        Book book = Book.builder().title(MINI_MESSAGE.deserialize(meta.getTitle() != null ? meta.getTitle() : "")).author(MINI_MESSAGE.deserialize(meta.getAuthor() != null ? meta.getAuthor() : "")).pages(meta.getPages().stream().map(p -> MINI_MESSAGE_EMPTY.deserialize(p, GlyphTag.getResolverForPlayer(player))).toList()).build();
 
         // Open fake book and deny opening of original book to avoid needing to format the original book
         event.setUseItemInHand(Event.Result.DENY);
@@ -175,11 +173,7 @@ public class FontEvents implements Listener {
             for (Map.Entry<String, Glyph> entry : manager.getGlyphByPlaceholderMap().entrySet()) {
                 String unicode = String.valueOf(entry.getValue().getCharacter());
                 if (entry.getValue().hasPermission(player))
-                    line = (manager.permsChatcolor == null)
-                            ? line.replace(entry.getKey(), ChatColor.WHITE + unicode + ChatColor.BLACK)
-                            .replace(unicode, ChatColor.WHITE + unicode + ChatColor.BLACK)
-                            : line.replace(entry.getKey(), ChatColor.WHITE + unicode + PapiAliases.setPlaceholders(player, manager.permsChatcolor))
-                            .replace(unicode, ChatColor.WHITE + unicode + ChatColor.BLACK);
+                    line = (manager.permsChatcolor == null) ? line.replace(entry.getKey(), ChatColor.WHITE + unicode + ChatColor.BLACK).replace(unicode, ChatColor.WHITE + unicode + ChatColor.BLACK) : line.replace(entry.getKey(), ChatColor.WHITE + unicode + PapiAliases.setPlaceholders(player, manager.permsChatcolor)).replace(unicode, ChatColor.WHITE + unicode + ChatColor.BLACK);
             }
             event.line(i, AdventureUtils.parseLegacyToComponent(line));
         }
@@ -194,10 +188,12 @@ public class FontEvents implements Listener {
         String displayName = clickedInv.getRenameText();
         ItemStack inputItem = clickedInv.getItem(0);
         ItemStack resultItem = clickedInv.getItem(2);
-        if (resultItem == null || !OraxenItems.exists(inputItem)) return;
+        if (resultItem == null) return;
 
         if (displayName != null) {
             displayName = AdventureUtils.parseLegacyThroughMiniMessage(displayName);
+
+            // Check if the player has permission for each glyph in the display name
             for (Character character : manager.getReverseMap().keySet()) {
                 if (!displayName.contains(String.valueOf(character))) continue;
                 Glyph glyph = manager.getGlyphFromName(manager.getReverseMap().get(character));
@@ -209,14 +205,11 @@ public class FontEvents implements Listener {
                 }
             }
 
+            // Replace placeholders with glyphs
             for (Map.Entry<String, Glyph> entry : manager.getGlyphByPlaceholderMap().entrySet()) {
-                if (entry.getValue().hasPermission(player))
-                    displayName = (manager.permsChatcolor == null)
-                            ? displayName.replace(entry.getKey(),
-                            String.valueOf(entry.getValue().getCharacter()))
-                            : displayName.replace(entry.getKey(),
-                            ChatColor.WHITE + String.valueOf(entry.getValue().getCharacter())
-                                    + PapiAliases.setPlaceholders(player, manager.permsChatcolor));
+                if (entry.getValue().hasPermission(player) && displayName.contains(entry.getKey())) {
+                    displayName = displayName.replace(entry.getKey(), ChatColor.RESET + "" + ChatColor.WHITE + entry.getValue().getCharacter());
+                }
             }
         }
 
@@ -279,8 +272,7 @@ public class FontEvents implements Listener {
                 Glyph glyph = entry.getValue();
 
                 if (player == null || glyph.hasPermission(player)) {
-                    component = (TextComponent) component.replaceText(TextReplacementConfig.builder()
-                            .matchLiteral(placeholder).replacement(glyph.getGlyphComponent()).build());
+                    component = (TextComponent) component.replaceText(TextReplacementConfig.builder().matchLiteral(placeholder).replacement(glyph.getGlyphComponent()).build());
                 }
             }
 
@@ -323,21 +315,13 @@ public class FontEvents implements Listener {
             if (!serialized.contains(character.toString())) continue;
 
             Glyph glyph = manager.getGlyphFromName(manager.getReverseMap().get(character));
-            if (!glyph.hasPermission(player)) message.replaceText(
-                    TextReplacementConfig.builder()
-                            .matchLiteral(character.toString())
-                            .replacement(glyph.getGlyphComponent().font(randomKey))
-                            .build()
-            );
+            if (!glyph.hasPermission(player))
+                message.replaceText(TextReplacementConfig.builder().matchLiteral(character.toString()).replacement(glyph.getGlyphComponent().font(randomKey)).build());
         }
 
         for (Map.Entry<String, Glyph> entry : manager.getGlyphByPlaceholderMap().entrySet())
             if (entry.getValue().hasPermission(player)) {
-                message = message.replaceText(
-                        TextReplacementConfig.builder()
-                                .matchLiteral(entry.getKey())
-                                .replacement(entry.getValue().getGlyphComponent()).build()
-                );
+                message = message.replaceText(TextReplacementConfig.builder().matchLiteral(entry.getKey()).replacement(entry.getValue().getGlyphComponent()).build());
             }
 
         return message;
