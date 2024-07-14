@@ -228,6 +228,7 @@ public class FontManager {
     public void sendGlyphTabCompletion(Player player) {
         List<String> completions = getGlyphByPlaceholderMap().values().stream()
                 .filter(Glyph::hasTabCompletion)
+                .filter(glyph -> glyph.hasPermission(player))
                 .map(glyph -> glyph.getPlaceholders()[0])
                 .toList();
 
